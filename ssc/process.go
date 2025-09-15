@@ -68,7 +68,7 @@ func (p *Process) StartInteractive() error {
 	return nil
 }
 
-func (p *Process) signal(signum syscall.Signal) error {
+func (p *Process) Signal(signum syscall.Signal) error {
 	if p.proc == nil {
 		return nil
 	}
@@ -83,20 +83,12 @@ func (p *Process) signal(signum syscall.Signal) error {
 
 func (p *Process) Pause() error {
 	p.paused = true
-	return p.signal(syscall.SIGSTOP)
+	return p.Signal(syscall.SIGSTOP)
 }
 
 func (p *Process) Resume() error {
 	p.paused = false
-	return p.signal(syscall.SIGCONT)
-}
-
-func (p *Process) Stop() error {
-	return p.signal(syscall.SIGTERM)
-}
-
-func (p *Process) Kill() error {
-	return p.signal(syscall.SIGKILL)
+	return p.Signal(syscall.SIGCONT)
 }
 
 func (p *Process) IsPaused() bool {

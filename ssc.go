@@ -5,7 +5,9 @@ import (
 	"log"
 	"net"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/chenx-dust/start-stop-connection/ssc"
@@ -74,6 +76,9 @@ func main() {
 		}
 	}
 
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
+
 	freezeTimer := time.NewTimer(freezeDelay)
 	isTiming := true
 	lastFirstConnTime := time.Now()
@@ -119,6 +124,12 @@ func main() {
 			}
 		case <-proc.ExitChan:
 			log.Println("process stopped")
+			os.Exit(0)
+		case signal := <-signalChan:
+			log.Println("got signal: ", signal)
+			if err := proc.Signal(signal.(syscall.Signal)); err != nil {
+				log.Println("process signal error: ", err)
+			}
 			os.Exit(0)
 		}
 	}
