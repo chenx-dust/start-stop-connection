@@ -29,7 +29,7 @@ func (p *Process) Start() error {
 	cmd.Stderr = os.Stderr
 
 	if err := cmd.Start(); err != nil {
-		log.Println("process start error: ", err)
+		log.Println("process start error:", err)
 		return err
 	}
 

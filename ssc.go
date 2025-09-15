@@ -32,7 +32,7 @@ func main() {
 	}
 
 	totalConn := 0
-	connChan := make(chan bool)
+	connChan := make(chan bool, 1)
 	for _, mapping := range strings.Split(portMapping, ";") {
 		if mapping == "" {
 			continue
@@ -44,11 +44,11 @@ func main() {
 
 		listenAddr, err := net.ResolveTCPAddr("tcp", addrs[0])
 		if err != nil {
-			log.Panicln("invalid listen address, error: ", err)
+			log.Panicln("invalid listen address, error:", err)
 		}
 		destAddr, err := net.ResolveTCPAddr("tcp", addrs[1])
 		if err != nil {
-			log.Panicln("invalid destination address, error: ", err)
+			log.Panicln("invalid destination address, error:", err)
 		}
 
 		forwarder := ssc.Forwarder{
@@ -57,7 +57,7 @@ func main() {
 			ConnChan:   connChan,
 		}
 		if err := forwarder.Listen(); err != nil {
-			log.Panicln("listen error: ", err)
+			log.Panicln("listen error:", err)
 		}
 	}
 
@@ -68,11 +68,11 @@ func main() {
 	log.SetOutput(os.Stdout)
 	if interactive {
 		if err := proc.StartInteractive(); err != nil {
-			log.Panicln("process start error: ", err)
+			log.Panicln("process start error:", err)
 		}
 	} else {
 		if err := proc.Start(); err != nil {
-			log.Panicln("process start error: ", err)
+			log.Panicln("process start error:", err)
 		}
 	}
 
@@ -86,18 +86,20 @@ func main() {
 		select {
 		case val := <-connChan:
 			if val {
+				log.Println("total connection:", totalConn, "->", totalConn+1)
 				totalConn++
 				if totalConn == 1 {
 					log.Println("first connection")
 					lastFirstConnTime = time.Now()
 					if proc.IsPaused() {
 						if err := proc.Resume(); err != nil {
-							log.Panicln("process resume error: ", err)
+							log.Panicln("process resume error:", err)
 						}
 						log.Println("resume process")
 					}
 				}
 			} else {
+				log.Println("total connection:", totalConn, "->", totalConn-1)
 				totalConn--
 				if totalConn == 0 {
 					log.Println("last connection")
@@ -118,7 +120,7 @@ func main() {
 			isTiming = false
 			if totalConn == 0 && !proc.IsPaused() {
 				if err := proc.Pause(); err != nil {
-					log.Println("process pause error: ", err)
+					log.Println("process pause error:", err)
 				}
 				log.Println("pause process, get into napping mode")
 			}
@@ -126,9 +128,9 @@ func main() {
 			log.Println("process stopped")
 			os.Exit(0)
 		case signal := <-signalChan:
-			log.Println("got signal: ", signal)
+			log.Println("got signal:", signal)
 			if err := proc.Signal(signal.(syscall.Signal)); err != nil {
-				log.Println("process signal error: ", err)
+				log.Println("process signal error:", err)
 			}
 			os.Exit(0)
 		}

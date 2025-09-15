@@ -29,21 +29,21 @@ func (f *Forwarder) listenLoop() {
 	for {
 		listenConn, err := f.listener.AcceptTCP()
 		if err != nil {
-			log.Println("listen error: ", err)
+			log.Println("listen error:", err)
 			continue
 		}
-		log.Println("new connection: ", listenConn.RemoteAddr())
+		log.Println("new connection:", listenConn.RemoteAddr())
 		go func() {
 			f.ConnChan <- true
 			defer func() { f.ConnChan <- false }()
 			fwdConn, err := net.DialTCP("tcp", nil, f.DestAddr)
 			if err != nil {
-				log.Println("dial error: ", err)
+				log.Println("dial error:", err)
 				return
 			}
 			f.forwardLoop(listenConn, fwdConn)
 		}()
-		log.Println("connection closed: ", listenConn.RemoteAddr())
+		log.Println("connection closed:", listenConn.RemoteAddr())
 	}
 }
 
@@ -54,7 +54,7 @@ func (f *Forwarder) forwardLoop(listenConn, fwdConn *net.TCPConn) {
 		defer wg.Done()
 		_, err := io.Copy(dst, src)
 		if err != nil {
-			log.Println("forward close due to: ", err)
+			log.Println("forward close due to:", err)
 			src.Close()
 			dst.Close()
 		}
