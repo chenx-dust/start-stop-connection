@@ -21,11 +21,10 @@ func main() {
 	flag.BoolVar(&interactive, "i", false, "interactive")
 	flag.Parse()
 
-	if portMapping == "" {
-		log.Panicln("port mapping is required")
-	}
 	if flag.NArg() == 0 {
-		log.Panicln("process command is required")
+		log.Println("process command is required")
+		flag.Usage()
+		os.Exit(1)
 	}
 
 	totalConn := 0
@@ -59,7 +58,8 @@ func main() {
 	}
 
 	proc := ssc.Process{
-		Command: flag.Args(),
+		Command:  flag.Args(),
+		ExitChan: make(chan struct{}),
 	}
 	log.SetOutput(os.Stdout)
 	if interactive {
@@ -78,7 +78,6 @@ func main() {
 		case val := <-connChan:
 			if val {
 				totalConn++
-				log.Println("new connection")
 				if totalConn == 1 {
 					if err := proc.Resume(); err != nil {
 						log.Panicln("process resume error: ", err)
@@ -100,6 +99,9 @@ func main() {
 				}
 				log.Println("pause process")
 			}
+		case <-proc.ExitChan:
+			log.Println("process stopped")
+			os.Exit(0)
 		}
 	}
 }

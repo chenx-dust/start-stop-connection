@@ -5,7 +5,6 @@ import (
 	"log"
 	"os"
 	"os/exec"
-	"sync"
 	"syscall"
 
 	"github.com/creack/pty"
@@ -13,7 +12,8 @@ import (
 )
 
 type Process struct {
-	Command []string
+	Command  []string
+	ExitChan chan struct{}
 
 	proc *exec.Cmd
 }
@@ -28,19 +28,21 @@ func (p *Process) Start() error {
 	cmd.Stderr = os.Stderr
 
 	if err := cmd.Start(); err != nil {
-		log.Println("process start error: {}")
+		log.Println("process start error: ", err)
 		return err
 	}
-	p.proc = cmd
 
+	go func() {
+		cmd.Wait()
+		p.ExitChan <- struct{}{}
+	}()
+
+	p.proc = cmd
 	return nil
 }
 
 func (p *Process) StartInteractive() error {
 	cmd := exec.Command(p.Command[0], p.Command[1:]...)
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Setpgid: true,
-	}
 
 	ptmx, err := pty.Start(cmd)
 	if err != nil {
@@ -54,16 +56,12 @@ func (p *Process) StartInteractive() error {
 	go func() {
 		defer ptmx.Close()
 		defer term.Restore(int(os.Stdin.Fd()), oldState)
-		var wg sync.WaitGroup
-		wg.Add(2)
-		forward := func(src, dst io.ReadWriteCloser) {
-			defer wg.Done()
-			io.Copy(dst, src)
-		}
-		go forward(os.Stdin, ptmx)
-		go forward(ptmx, os.Stdout)
-		wg.Wait()
+		go io.Copy(ptmx, os.Stdin)
+		io.Copy(os.Stdout, ptmx)
+		p.ExitChan <- struct{}{}
 	}()
+
+	p.proc = cmd
 	return nil
 }
 
