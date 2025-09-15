@@ -132,7 +132,8 @@ func main() {
 			if err := proc.Signal(signal.(syscall.Signal)); err != nil {
 				log.Println("process signal error:", err)
 			}
-			os.Exit(0)
+			proc.Wait()
+			os.Exit(proc.ExitCode())
 		}
 	}
 }

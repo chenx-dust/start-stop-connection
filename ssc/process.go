@@ -94,3 +94,10 @@ func (p *Process) Resume() error {
 func (p *Process) IsPaused() bool {
 	return p.paused
 }
+
+func (p *Process) Wait() {
+	p.proc.Wait()
+}
+func (p *Process) ExitCode() int {
+	return p.proc.ProcessState.ExitCode()
+}
