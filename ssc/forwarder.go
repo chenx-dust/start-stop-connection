@@ -41,25 +41,27 @@ func (f *Forwarder) listenLoop() {
 				log.Println("dial error:", err)
 				return
 			}
-			f.forwardLoop(listenConn, fwdConn)
+			tx, rx := f.forwardLoop(listenConn, fwdConn)
+			log.Println("connection closed:", listenConn.RemoteAddr(), "tx:", tx, "rx:", rx, "total:", tx+rx)
 		}()
-		log.Println("connection closed:", listenConn.RemoteAddr())
 	}
 }
 
-func (f *Forwarder) forwardLoop(listenConn, fwdConn *net.TCPConn) {
+func (f *Forwarder) forwardLoop(listenConn, fwdConn *net.TCPConn) (tx, rx int64) {
 	var wg sync.WaitGroup
 	wg.Add(2)
-	forward := func(src, dst *net.TCPConn) {
+	forward := func(src, dst *net.TCPConn, n_ *int64) {
 		defer wg.Done()
-		_, err := io.Copy(dst, src)
+		n, err := io.Copy(dst, src)
 		if err != nil {
 			log.Println("forward close due to:", err)
-			src.Close()
-			dst.Close()
 		}
+		*n_ = n
+		src.Close()
+		dst.Close()
 	}
-	go forward(listenConn, fwdConn)
-	go forward(fwdConn, listenConn)
+	go forward(listenConn, fwdConn, &tx)
+	go forward(fwdConn, listenConn, &rx)
 	wg.Wait()
+	return
 }
