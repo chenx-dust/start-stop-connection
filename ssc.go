@@ -83,6 +83,7 @@ func main() {
 			if val {
 				totalConn++
 				if totalConn == 1 {
+					log.Println("first connection")
 					lastFirstConnTime = time.Now()
 					if proc.IsPaused() {
 						if err := proc.Resume(); err != nil {
@@ -93,16 +94,18 @@ func main() {
 				}
 			} else {
 				totalConn--
-				log.Println("connection closed")
 				if totalConn == 0 {
+					log.Println("last connection")
 					if time.Since(lastFirstConnTime) < napDuration {
 						// In napping mode, too short connection, continue to pause
 						if !isTiming {
 							freezeTimer.Reset(0)
+							log.Println("nap mode, too short connection, continue to pause")
 						}
 					} else {
 						isTiming = true
 						freezeTimer.Reset(freezeDelay)
+						log.Println("counting down to freeze")
 					}
 				}
 			}
@@ -112,7 +115,7 @@ func main() {
 				if err := proc.Pause(); err != nil {
 					log.Println("process pause error: ", err)
 				}
-				log.Println("pause process")
+				log.Println("pause process, get into napping mode")
 			}
 		case <-proc.ExitChan:
 			log.Println("process stopped")

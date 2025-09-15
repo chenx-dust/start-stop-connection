@@ -22,7 +22,7 @@ type Process struct {
 func (p *Process) Start() error {
 	cmd := exec.Command(p.Command[0], p.Command[1:]...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Setpgid: true,
+		Setsid: true,
 	}
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout

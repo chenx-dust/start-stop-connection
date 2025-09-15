@@ -43,6 +43,7 @@ func (f *Forwarder) listenLoop() {
 			}
 			f.forwardLoop(listenConn, fwdConn)
 		}()
+		log.Println("connection closed: ", listenConn.RemoteAddr())
 	}
 }
 
