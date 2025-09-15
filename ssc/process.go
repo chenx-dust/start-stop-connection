@@ -15,7 +15,8 @@ type Process struct {
 	Command  []string
 	ExitChan chan struct{}
 
-	proc *exec.Cmd
+	proc   *exec.Cmd
+	paused bool
 }
 
 func (p *Process) Start() error {
@@ -38,6 +39,7 @@ func (p *Process) Start() error {
 	}()
 
 	p.proc = cmd
+	p.paused = false
 	return nil
 }
 
@@ -62,6 +64,7 @@ func (p *Process) StartInteractive() error {
 	}()
 
 	p.proc = cmd
+	p.paused = false
 	return nil
 }
 
@@ -79,13 +82,23 @@ func (p *Process) signal(signum syscall.Signal) error {
 }
 
 func (p *Process) Pause() error {
+	p.paused = true
 	return p.signal(syscall.SIGSTOP)
 }
 
 func (p *Process) Resume() error {
+	p.paused = false
 	return p.signal(syscall.SIGCONT)
 }
 
 func (p *Process) Stop() error {
 	return p.signal(syscall.SIGTERM)
+}
+
+func (p *Process) Kill() error {
+	return p.signal(syscall.SIGKILL)
+}
+
+func (p *Process) IsPaused() bool {
+	return p.paused
 }

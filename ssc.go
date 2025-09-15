@@ -15,10 +15,12 @@ func main() {
 	var portMapping string
 	var freezeDelay time.Duration
 	var interactive bool
+	var napDuration time.Duration
 
-	flag.StringVar(&portMapping, "p", "", "port mapping")
-	flag.DurationVar(&freezeDelay, "d", 0, "freeze delay")
-	flag.BoolVar(&interactive, "i", false, "interactive")
+	flag.StringVar(&portMapping, "p", "", "port mapping (format: listenAddr=destAddr;..., example: :8080=:80;127.0.0.1:8081=127.0.0.1:81)")
+	flag.DurationVar(&freezeDelay, "d", 0, "freeze delay (default: 0, format: go-style duration string)")
+	flag.BoolVar(&interactive, "i", false, "interactive mode (using pty)")
+	flag.DurationVar(&napDuration, "n", 0, "nap duration (quick pause when no long connection, default: 0)")
 	flag.Parse()
 
 	if flag.NArg() == 0 {
@@ -73,27 +75,40 @@ func main() {
 	}
 
 	freezeTimer := time.NewTimer(freezeDelay)
+	isTiming := true
+	lastFirstConnTime := time.Now()
 	for {
 		select {
 		case val := <-connChan:
 			if val {
 				totalConn++
 				if totalConn == 1 {
-					if err := proc.Resume(); err != nil {
-						log.Panicln("process resume error: ", err)
+					lastFirstConnTime = time.Now()
+					if proc.IsPaused() {
+						if err := proc.Resume(); err != nil {
+							log.Panicln("process resume error: ", err)
+						}
+						log.Println("resume process")
 					}
-					freezeTimer.Stop()
-					log.Println("resume process")
 				}
 			} else {
 				totalConn--
 				log.Println("connection closed")
 				if totalConn == 0 {
-					freezeTimer.Reset(freezeDelay)
+					if time.Since(lastFirstConnTime) < napDuration {
+						// In napping mode, too short connection, continue to pause
+						if !isTiming {
+							freezeTimer.Reset(0)
+						}
+					} else {
+						isTiming = true
+						freezeTimer.Reset(freezeDelay)
+					}
 				}
 			}
 		case <-freezeTimer.C:
-			if totalConn == 0 {
+			isTiming = false
+			if totalConn == 0 && !proc.IsPaused() {
 				if err := proc.Pause(); err != nil {
 					log.Println("process pause error: ", err)
 				}
