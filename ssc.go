@@ -14,9 +14,11 @@ import (
 func main() {
 	var portMapping string
 	var freezeDelay time.Duration
+	var interactive bool
 
 	flag.StringVar(&portMapping, "p", "", "port mapping")
 	flag.DurationVar(&freezeDelay, "d", 0, "freeze delay")
+	flag.BoolVar(&interactive, "i", false, "interactive")
 	flag.Parse()
 
 	if portMapping == "" {
@@ -60,8 +62,14 @@ func main() {
 		Command: flag.Args(),
 	}
 	log.SetOutput(os.Stdout)
-	if err := proc.Start(); err != nil {
-		log.Panicln("process start error: ", err)
+	if interactive {
+		if err := proc.StartInteractive(); err != nil {
+			log.Panicln("process start error: ", err)
+		}
+	} else {
+		if err := proc.Start(); err != nil {
+			log.Panicln("process start error: ", err)
+		}
 	}
 
 	freezeTimer := time.NewTimer(freezeDelay)

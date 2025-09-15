@@ -1,10 +1,15 @@
 package ssc
 
 import (
+	"io"
 	"log"
 	"os"
 	"os/exec"
+	"sync"
 	"syscall"
+
+	"github.com/creack/pty"
+	"golang.org/x/term"
 )
 
 type Process struct {
@@ -28,6 +33,37 @@ func (p *Process) Start() error {
 	}
 	p.proc = cmd
 
+	return nil
+}
+
+func (p *Process) StartInteractive() error {
+	cmd := exec.Command(p.Command[0], p.Command[1:]...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Setpgid: true,
+	}
+
+	ptmx, err := pty.Start(cmd)
+	if err != nil {
+		return err
+	}
+	oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
+	if err != nil {
+		return err
+	}
+
+	go func() {
+		defer ptmx.Close()
+		defer term.Restore(int(os.Stdin.Fd()), oldState)
+		var wg sync.WaitGroup
+		wg.Add(2)
+		forward := func(src, dst io.ReadWriteCloser) {
+			defer wg.Done()
+			io.Copy(dst, src)
+		}
+		go forward(os.Stdin, ptmx)
+		go forward(ptmx, os.Stdout)
+		wg.Wait()
+	}()
 	return nil
 }
 
