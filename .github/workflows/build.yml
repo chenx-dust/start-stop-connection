@@ -1,0 +1,140 @@
+# This file is modified from https://github.com/MetaCubeX/mihomo/blob/Meta/.github/workflows/build.yml
+# License: GPL-3.0
+
+name: Build
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Tag version to release"
+        required: true
+  push:
+    paths-ignore:
+      - "README.md"
+    branches:
+      - "main"
+concurrency:
+  group: "${{ github.workflow }}-${{ github.ref }}"
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        jobs:
+          - { goos: darwin, goarch: amd64, goamd64: v1, output: amd64-compatible }
+          - { goos: darwin, goarch: amd64, goamd64: v3, output: amd64 }
+          - { goos: darwin, goarch: arm64, output: arm64 }
+
+          - { goos: linux, goarch: '386', go386: sse2, output: '386', debian: i386, rpm: i386}
+          - { goos: linux, goarch: '386', go386: softfloat, output: '386-softfloat' }
+          - { goos: linux, goarch: amd64, goamd64: v1, output: amd64-compatible}
+          - { goos: linux, goarch: amd64, goamd64: v3, output: amd64, debian: amd64, rpm: x86_64, pacman: x86_64}
+          - { goos: linux, goarch: arm64, output: arm64, debian: arm64, rpm: aarch64, pacman: aarch64}  
+          - { goos: linux, goarch: arm, goarm: '5', output: armv5 }
+          - { goos: linux, goarch: arm, goarm: '6', output: armv6, debian: armel, rpm: armv6hl} 
+          - { goos: linux, goarch: arm, goarm: '7', output: armv7, debian: armhf, rpm: armv7hl, pacman: armv7hl}
+          - { goos: linux, goarch: mips, gomips: hardfloat, output: mips-hardfloat }
+          - { goos: linux, goarch: mips, gomips: softfloat, output: mips-softfloat }
+          - { goos: linux, goarch: mipsle, gomips: hardfloat, output: mipsle-hardfloat }
+          - { goos: linux, goarch: mipsle, gomips: softfloat, output: mipsle-softfloat }
+          - { goos: linux, goarch: mips64, output: mips64 }
+          - { goos: linux, goarch: mips64le, output: mips64le, debian: mips64el, rpm: mips64el }
+          - { goos: linux, goarch: loong64, output: loong64-abi1, abi: '1', debian: loongarch64, rpm: loongarch64 }
+          - { goos: linux, goarch: loong64, output: loong64-abi2, abi: '2', debian: loong64, rpm: loong64 }
+          - { goos: linux, goarch: riscv64, output: riscv64, debian: riscv64, rpm: riscv64 }
+          - { goos: linux, goarch: s390x, output: s390x, debian: s390x, rpm: s390x }
+          - { goos: linux, goarch: ppc64le, output: ppc64le, debian: ppc64el, rpm: ppc64le }
+
+          - { goos: freebsd, goarch: '386', output: '386' }
+          - { goos: freebsd, goarch: amd64, goamd64: v1, output: amd64-compatible }
+          - { goos: freebsd, goarch: amd64, goamd64: v3, output: amd64 }
+          - { goos: freebsd, goarch: arm64, output: arm64 }
+
+          # Go 1.20 is the last release that will run on macOS 10.13 High Sierra or 10.14 Mojave. Go 1.21 will require macOS 10.15 Catalina or later.
+          - { goos: darwin, goarch: arm64, output: arm64-go120, goversion: '1.20' }
+          - { goos: darwin, goarch: amd64, goamd64: v1, output: amd64-compatible-go120, goversion: '1.20' }
+          - { goos: darwin, goarch: amd64, goamd64: v3, output: amd64-go120, goversion: '1.20' }
+
+          - { goos: linux, goarch: '386', output: '386-go120', goversion: '1.20' }
+          - { goos: linux, goarch: amd64, goamd64: v1, output: amd64-compatible-go120, goversion: '1.20' }
+          - { goos: linux, goarch: amd64, goamd64: v3, output: amd64-go120, goversion: '1.20' }
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      if: ${{ matrix.jobs.goversion == '' && matrix.jobs.abi != '1' }}
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.25'
+
+    - name: Set up Go
+      if: ${{ matrix.jobs.goversion != '' && matrix.jobs.abi != '1' }}
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ matrix.jobs.goversion }}
+
+    - name: Set up Go1.24 loongarch abi1
+      if: ${{ matrix.jobs.goarch == 'loong64' && matrix.jobs.abi == '1' }}
+      run: |
+        wget -q https://github.com/MetaCubeX/loongarch64-golang/releases/download/1.24.0/go1.24.0.linux-amd64-abi1.tar.gz
+        sudo tar zxf go1.24.0.linux-amd64-abi1.tar.gz -C /usr/local
+        echo "/usr/local/go/bin" >> $GITHUB_PATH
+
+    - name: Set variables
+      run: |
+        VERSION="${GITHUB_REF_NAME,,}-$(git rev-parse --short HEAD)"
+        VERSION="${VERSION//\//-}"
+        if [ -n "${{ github.event.inputs.version }}" ]; then
+          VERSION=${{ github.event.inputs.version }}
+        fi
+        echo "VERSION=${VERSION}" >> $GITHUB_ENV
+      
+        echo "BUILDTIME=$(date)" >> $GITHUB_ENV
+        echo "CGO_ENABLED=0" >> $GITHUB_ENV
+        echo "BUILDTAG=-extldflags --static" >> $GITHUB_ENV
+        echo "GOTOOLCHAIN=local" >> $GITHUB_ENV
+
+    - name: Build core
+      env:
+        GOOS: ${{matrix.jobs.goos}}
+        GOARCH: ${{matrix.jobs.goarch}}
+        GOAMD64: ${{matrix.jobs.goamd64}}
+        GO386: ${{matrix.jobs.go386}}
+        GOARM: ${{matrix.jobs.goarm}}
+        GOMIPS: ${{matrix.jobs.gomips}}
+      run: |
+        go env
+        go build -v -tags "with_gvisor" -trimpath -ldflags "${BUILDTAG} -w -s -buildid="
+        cp ssc ssc-${{matrix.jobs.goos}}-${{matrix.jobs.output}}
+
+    - name: Archive production artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: "${{ matrix.jobs.goos }}-${{ matrix.jobs.output }}"
+        path: |
+          ssc-*
+
+  Upload-Release:
+    permissions: write-all
+    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.version != '' }}
+    needs: [build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: bin/
+          merge-multiple: true
+  
+      - name: Display structure of downloaded files
+        run: ls -R
+        working-directory: bin
+  
+      - name: Upload Release
+        uses: softprops/action-gh-release@v2
+        if: ${{ success() }}
+        with:
+          tag_name: ${{ github.event.inputs.version }}
+          files: bin/*
